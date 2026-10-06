@@ -182,8 +182,22 @@ def ago(ts):
     return "just now"
 
 
+def _display_tz():
+    if not config.DISPLAY_TZ:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(config.DISPLAY_TZ)
+    except Exception:
+        return None
+
+
+DISPLAY_TZ = _display_tz()
+
+
 def dt(ts, fmt="%d %b %Y, %H:%M"):
-    return datetime.fromtimestamp(ts).strftime(fmt) if ts else "—"
+    return datetime.fromtimestamp(ts, DISPLAY_TZ).strftime(fmt) if ts else "—"
 
 
 def num(n):

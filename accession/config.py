@@ -31,6 +31,10 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "")
 # owner actions (deleting domains, system settings, pausing services) and visitors
 # get conservative limits. Fetches to private / internal addresses are refused.
 PUBLIC = os.environ.get("ACCESSION_PUBLIC") == "1"
+
+# Time zone for dates shown in the interface. Servers (Vercel) run on UTC, so the
+# hosted site defaults to Indian Standard Time; locally the machine's zone is used.
+DISPLAY_TZ = os.environ.get("ACCESSION_TZ") or ("Asia/Kolkata" if SERVERLESS else "")
 PUBLIC_MAX_PAGES = int(os.environ.get("ACCESSION_PUBLIC_MAX_PAGES", 500))
 PUBLIC_MAX_DOMAINS = int(os.environ.get("ACCESSION_PUBLIC_MAX_DOMAINS", 100))
 
