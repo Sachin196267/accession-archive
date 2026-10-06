@@ -151,3 +151,117 @@ No paid APIs are used.
 - JavaScript rendering (Playwright) is available locally, not on Vercel.
 - The Instagram bonus (login walls detected and reported, never bypassed) was not
   tested against Instagram itself.
+
+## Results and evidence
+
+All numbers come from real runs: the recorded walkthrough (database kept), the
+automated test suite, and checks against the live deployment.
+
+### 1. Discovery: bundled demo website, 0.55 s simulated server latency per request
+
+| Scan | Pages fetched | URLs seen | New | No longer linked | Changed | Answered 304 | Errors | Time | Speed |
+|---|---|---|---|---|---|---|---|---|---|
+| Site A, scan 1 | 48 | 51 | 51 | 0 | 0 | 0 | 0 | 9.5 s | ≈ 304 pages/min |
+| Site A, scan 2 (after the site was updated) | 54 | 57 | 7 | 1 | 6 | 39 | 0 | 11.1 s | ≈ 292 pages/min |
+| Site B, scan 1 (second domain, same queue) | 48 | 50 | 50 | 0 | 0 | 0 | 0 | 10.6 s | ≈ 272 pages/min |
+
+Without simulated latency, the first scan of site A took about 1 s (≈ 2,900 pages/min).
+
+**Discovery sources** (rows in `url_sources`):
+
+| Source | Rows |
+|---|---|
+| link | 88 |
+| sitemap | 72 |
+| feed | 24 |
+| pagination | 7 |
+| seed | 2 |
+| redirect | 2 |
+| canonical | 2 |
+| external | 1 |
+
+Three pages on each site were found only through the gzip sitemap. Nothing links to
+them.
+
+**Clean-up.** These were stored with the reason and not submitted:
+
+| Reason | URLs |
+|---|---|
+| Disallowed by robots.txt | 2 |
+| Canonical duplicates | 2 |
+| Redirects to another URL in the inventory | 2 |
+| External link, recorded only | 1 |
+| HTTP 404 / 500 | 4 |
+
+A link carrying `utm_*` tracking parameters was normalized to the clean URL and
+stored once.
+
+### 2. Incremental backup and change detection
+
+- After the update (6 posts added, 1 page edited, 1 post removed), scan 2 queued
+  **only the 7 new URLs**. The 45 pages already archived were not resubmitted.
+- **39 of 54** fetches in scan 2 answered `304 Not Modified`, so they were not
+  downloaded again. Their stored links were reused.
+- Comparing the two snapshots of `/about` shows exactly the one edited sentence.
+
+### 3. Archiving
+
+| Submissions | Count |
+|---|---|
+| Local snapshots stored | 149 (97 KB of compressed copies) |
+| Successful: new pages | 97 |
+| Successful: explicit re-archive | 51 |
+| Successful: manual request | 1 |
+| Failed (genuine) | 1 |
+| Average capture time | ≈ 0.56 s |
+
+The one failure is `/blog/post-3`, which the site update had deleted, so it returned
+404. It was recorded as failed and left visible for review.
+
+### 4. Crash recovery
+
+The server process was killed (`SIGKILL`) while re-archiving. After the restart, the
+log recorded *"1 submission … recovered from an interrupted worker"*, and the queue
+finished the remaining work. Nothing was lost and nothing was submitted twice. This is
+shown on camera in chapter 9 of the video.
+
+### 5. Automated tests
+
+**20 / 20 passing.** The suite runs twice:
+- against local SQLite;
+- against a stand-in for the hosted database that is as strict as the real Turso
+  server.
+
+What the tests cover:
+- every discovery source;
+- de-duplication;
+- incremental rescans with 304s;
+- Save Page Now with and without keys (mock server);
+- archive.today CAPTCHA, which is never bypassed;
+- the Wayback login wall;
+- permanent vs temporary failures and retries;
+- crash recovery and resuming an interrupted scan;
+- round-robin fairness and priority between domains;
+- JavaScript rendering: three links that exist only after scripts run were found;
+- serverless bursts.
+
+### 6. Live deployment checks (https://accession-archive.vercel.app)
+
+- Public pages load with no login. Owner-only actions (system settings, deleting a
+  domain) redirect to sign-in.
+- `example.com` was added, scanned and archived end to end on Vercel + Turso:
+  1 URL found, 1 archived, 0 failed.
+- Private and internal addresses (`localhost`, `127.0.0.1`) are refused, and visitor
+  scans are capped at 500 pages.
+- Testing on the real deployment found a production-only bug: Turso rejects unused
+  query parameters, which SQLite silently ignores. It was fixed, and the test
+  stand-in was made equally strict so the bug cannot return.
+
+### Where to verify
+
+| Evidence | Where |
+|---|---|
+| Video | Walkthrough, chapters 3, 8 and 9 |
+| Live data | Register → domain page → **Scans** tab and **Activity** log |
+| Tests | `python -m pytest -q` |
+| Mapping to the assignment | `docs/REQUIREMENTS.md` |
