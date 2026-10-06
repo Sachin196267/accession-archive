@@ -321,10 +321,18 @@ def dashboard(request: Request):
     running = {r["domain_id"]: r for r in c.execute("SELECT * FROM scans WHERE state = 'running'")}
     progress = {did: scan_progress(c, s) for did, s in running.items()}
     services = service_health(c)
+    latest = c.execute(
+        """SELECT s.id, s.service, s.archive_url, s.finished_at, s.url_id, u.url, d.host
+           FROM submissions s JOIN urls u ON u.id = s.url_id JOIN domains d ON d.id = s.domain_id
+           WHERE s.state = 'success' AND s.archive_url IS NOT NULL
+           ORDER BY s.finished_at DESC LIMIT 12"""
+    ).fetchall()
+    access, secret = config.ia_keys(db.settings(c))
+    needs_keys = not (access and secret) and any("wayback" in (d["services"] or "") for d in domains)
     return page(
         request, "dashboard.html", nav="register", domains=domains, totals=totals(c), progress=progress,
         events=recent_events(c, limit=30), tp=repo.throughput(c), services=services,
-        render_available=render.available(),
+        render_available=render.available(), latest=latest, needs_keys=needs_keys,
     )
 
 

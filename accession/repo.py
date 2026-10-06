@@ -389,13 +389,15 @@ def domain_overview(con) -> list[dict]:
     ).fetchall()
     counts: dict = {}
     for r in con.execute("SELECT domain_id, state, service, COUNT(*) n FROM submissions GROUP BY domain_id, state, service"):
-        c = counts.setdefault(r["domain_id"], {"states": {}, "services": set()})
+        c = counts.setdefault(r["domain_id"], {"states": {}, "services": set(), "ok": {}})
         c["states"][r["state"]] = c["states"].get(r["state"], 0) + r["n"]
         c["services"].add(r["service"])
+        if r["state"] == "success":
+            c["ok"][r["service"]] = c["ok"].get(r["service"], 0) + r["n"]
     out = []
     for r in rows:
         d = dict(r)
-        c = counts.get(r["id"], {"states": {}, "services": set()})
+        c = counts.get(r["id"], {"states": {}, "services": set(), "ok": {}})
         st = c["states"]
         d["queued"] = st.get("queued", 0) + st.get("retry", 0)
         d["running"] = st.get("running", 0)
@@ -405,6 +407,7 @@ def domain_overview(con) -> list[dict]:
         d["submitted"] = sum(v for k, v in st.items() if k in ("success", "failed", "blocked")) + d["running"]
         d["pending"] = d["queued"] + d["running"]
         d["used_services"] = sorted(c["services"])
+        d["archived_by_service"] = c["ok"]
         d["status"] = domain_status(d)
         out.append(d)
     return out

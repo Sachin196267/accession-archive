@@ -23,6 +23,10 @@
   <div><div class="l">Last sent</div><div class="v small" data-k="t-last_submission">{{ totals.last_submission|ago }}</div><div class="n">scan <span data-k="t-last_scan">{{ totals.last_scan|ago }}</span></div></div>
 </div>
 
+{% if needs_keys %}
+<div class="flash" style="border-left-color:var(--ochre)">The Wayback Machine now asks for an archive.org login, and no keys are set, so Wayback captures will wait in <a href="/queue">Needs review</a>. {% if is_owner %}Add keys on the <a href="/system">System</a> page.{% else %}The owner can add keys on the System page.{% endif %} Local snapshots work without keys.</div>
+{% endif %}
+
 <details class="drawer"{% if not domains %} open{% endif %}>
   <summary>Add a domain, or several <span class="plus">one per line</span></summary>
   <form class="inner" method="post" action="/domains">
@@ -75,7 +79,7 @@
       <thead><tr>
         <th>Domain</th><th>Status</th><th class="num">URLs</th><th class="num">Queued</th>
         <th class="num">Submitted</th><th class="num">Archived</th><th class="num">Failed</th>
-        <th class="hide-sm">Services</th><th class="hide-sm">Last scan</th><th class="hide-sm">Last sent</th>
+        <th class="hide-sm">Archived at</th><th class="hide-sm">Last scan</th><th class="hide-sm">Last sent</th>
       </tr></thead>
       <tbody>
       {% for d in domains %}
@@ -90,7 +94,7 @@
           <td class="num" data-k="d{{ d.id }}-submitted">{{ d.submitted|num }}</td>
           <td class="num" data-k="d{{ d.id }}-success">{{ d.success|num }}</td>
           <td class="num" data-k="d{{ d.id }}-failed">{{ d.failed|num }}</td>
-          <td class="hide-sm small">{% for s in (d.services or '').split(',') if s %}{{ s|svc }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          <td class="hide-sm small nowrap">{% for s in (d.services or '').split(',') if s %}{{ s|svc }} <span class="mono {{ 'dim' if not d.archived_by_service.get(s) }}">{{ d.archived_by_service.get(s, 0)|num }}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
           <td class="when hide-sm" data-k="d{{ d.id }}-last_scan">{{ d.last_scan_at|ago }}</td>
           <td class="when hide-sm" data-k="d{{ d.id }}-last_submission">{{ d.last_submission_at|ago }}</td>
         </tr>
@@ -101,6 +105,26 @@
     {% else %}
     <div class="empty"><p>The register is empty.</p><p class="small dim" style="font:13px var(--sans)">Add a domain above. To try everything offline, run <code>python -m accession demo-site</code> and add <code>http://127.0.0.1:8765/</code>.</p></div>
     {% endif %}
+
+    <div class="section-head" style="margin-top:34px"><h2>Latest archive links</h2>
+      <a class="btn tiny quiet" href="/search?state=success">All archived URLs</a></div>
+    {% if latest %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Archived</th><th>URL</th><th>Service</th><th>Archive link</th></tr></thead>
+      <tbody>
+      {% for s in latest %}
+        <tr>
+          <td class="when">{{ s.finished_at|ago }}</td>
+          <td>{{ m.url(s.url, '/urls/' ~ s.url_id) }}</td>
+          <td class="small nowrap">{{ s.service|svc }}</td>
+          <td class="small"><a class="mono" href="{{ s.archive_url }}" target="_blank" rel="noopener">{{ s.archive_url|truncate(48, true, '…') }} ↗</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}<p class="small dim">Nothing archived yet. Links to every capture appear here as soon as they exist.</p>{% endif %}
   </section>
 
   <aside class="side">
