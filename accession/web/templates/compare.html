@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Compare snapshots · Accession{% endblock %}
+{% block content %}
+<div class="head">
+  <div style="min-width:0">
+    <div class="kicker"><a href="/urls/{{ u.id }}">back to the record</a> / compare</div>
+    <h1 style="font-size:34px">Snapshot #{{ a.id }} <em>against</em> #{{ b.id }}</h1>
+    <div class="sub mono">{{ u.url }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn {{ 'primary' if mode == 'text' }}" href="?a={{ a.id }}&b={{ b.id }}&mode=text">Visible text</a>
+    <a class="btn {{ 'primary' if mode == 'html' }}" href="?a={{ a.id }}&b={{ b.id }}&mode=html">HTML source</a>
+  </div>
+</div>
+
+<div class="ledger">
+  <div><div class="l">Older</div><div class="v small">{{ a.captured_at|dt }}</div><div class="n mono">{{ a.content_hash[:12] }} · {{ (a.size/1024)|round(1) }} KB</div></div>
+  <div><div class="l">Newer</div><div class="v small">{{ b.captured_at|dt }}</div><div class="n mono">{{ b.content_hash[:12] }} · {{ (b.size/1024)|round(1) }} KB</div></div>
+  <div><div class="l">Lines added</div><div class="v green">{{ added|num }}</div></div>
+  <div><div class="l">Lines removed</div><div class="v{{ ' red' if removed }}">{{ removed|num }}</div></div>
+  <div><div class="l">Similarity</div><div class="v">{{ ((ratio or 0) * 100)|round(1) if ratio is not none else '—' }}{{ '%' if ratio is not none }}</div></div>
+</div>
+
+<section>
+{% if same %}
+  <div class="empty"><p>Byte-for-byte identical. Nothing changed between these captures.</p></div>
+{% elif not diff %}
+  <div class="empty"><p>The {{ 'visible text is' if mode == 'text' else 'source is' }} the same; the difference is elsewhere in the markup.</p></div>
+{% else %}
+  <div class="diff">{% for line in diff %}<div class="{{ 'add' if line.startswith('+') else 'del' if line.startswith('-') else 'hunk' if line.startswith('@@') else '' }}">{{ line }}</div>{% endfor %}</div>
+{% endif %}
+</section>
+{% endblock %}

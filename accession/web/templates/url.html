@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% import "_m.html" as m %}
+{% block title %}{{ u.url }} · Accession{% endblock %}
+{% block content %}
+{% set o, rest = u.url|split_url %}
+<div class="head">
+  <div style="min-width:0">
+    <div class="kicker"><a href="/">Register</a> / <a href="/domains/{{ d.id }}">{{ d.host }}</a> / url {{ u.id }}</div>
+    <h1 style="font-size:34px"><span class="dim">{{ o }}</span>{{ rest }}</h1>
+    <div class="sub">{% if u.title %}“{{ u.title }}”<span class="sep">|</span>{% endif %}
+      {{ m.http(u) }}<span class="sep">|</span><a href="{{ u.url }}" target="_blank" rel="noopener">open live page ↗</a>
+      {% if u.priority > 0 %}<span class="sep">|</span><b>marked important</b>{% endif %}</div>
+  </div>
+</div>
+
+<div class="cols">
+  <div>
+    <section style="margin-top:0">
+      <div class="section-head"><h2>Archive history<span class="count">{{ subs|length }} submission{{ 's' if subs|length != 1 }}</span></h2></div>
+      {% if subs %}
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Requested</th><th>Service</th><th>State</th><th>Why</th><th class="num">Tries</th><th>Archive</th></tr></thead>
+        <tbody>
+        {% for s in subs %}
+        <tr>
+          <td class="when">{{ s.created_at|dt('%d %b %Y %H:%M') }}{% if s.finished_at %}<div class="dim">done {{ s.finished_at|dt('%d %b %H:%M') }}</div>{% endif %}</td>
+          <td class="nowrap">{{ s.service|svc }}</td>
+          <td>{{ m.tag(s.state) }}</td>
+          <td class="small dim">{{ s.reason }}</td>
+          <td class="num">{{ s.attempts }}</td>
+          <td class="small">
+            {% if s.archive_url %}<a class="mono" href="{{ s.archive_url }}" target="_blank" rel="noopener">{{ s.archive_url }}</a>{% if s.note %}<div class="dim">{{ s.note }}</div>{% endif %}
+            {% elif s.error %}<span style="color:var(--red)">{{ s.error }}</span>{% endif %}
+            {% if s.state == 'retry' %}<div class="dim">next try {{ s.next_attempt_at|ago }}</div>{% endif %}
+            {% if s.state == 'blocked' %}
+              <div style="margin-top:6px"><a class="btn tiny" href="{{ s.manual_url }}" target="_blank" rel="noopener">Submit by hand ↗</a></div>
+              <form method="post" action="/submissions/{{ s.id }}/manual" class="actions" style="margin-top:6px">
+                <input type="url" name="archive_url" placeholder="paste the archive link" required style="max-width:260px">
+                <button class="btn tiny">Record</button></form>
+            {% endif %}
+            {% if s.state in ('failed', 'blocked', 'cancelled') %}<form method="post" action="/submissions/{{ s.id }}/retry" style="margin-top:6px"><button class="linkish small">retry</button></form>{% endif %}
+            {% if s.state in ('queued', 'retry') %}<form method="post" action="/submissions/{{ s.id }}/cancel" style="margin-top:6px"><button class="linkish small">cancel</button></form>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}
+      <div class="empty"><p>{{ 'Excluded from automatic archiving: ' ~ u.skip_reason ~ '.' if u.skip_reason else 'Never submitted.' }}</p></div>
+      {% endif %}
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Local snapshots<span class="count">{{ snaps|length }}</span></h2>
+        {% if snaps|length > 1 %}<a class="btn tiny quiet" href="/compare?a={{ snaps[1].id }}&b={{ snaps[0].id }}">Compare the latest two</a>{% endif %}</div>
+      {% if snaps %}
+      <table>
+        <thead><tr><th>#</th><th>Captured</th><th class="num">Size</th><th>SHA-256</th><th>Kind</th><th></th></tr></thead>
+        <tbody>
+        {% for s in snaps %}
+        <tr>
+          <td class="idx">{{ s.id }}</td>
+          <td class="when">{{ s.captured_at|dt }}</td>
+          <td class="num">{{ (s.size / 1024)|round(1) }} KB</td>
+          <td class="mono small">{{ s.content_hash[:16] }}{% if not loop.last and snaps[loop.index].content_hash != s.content_hash %} <span style="color:var(--ochre)">changed</span>{% endif %}</td>
+          <td class="small">{{ 'rendered' if s.rendered else 'raw HTML' }}</td>
+          <td class="nowrap small"><a href="/snapshots/{{ s.id }}" target="_blank">view</a> · <a href="/snapshots/{{ s.id }}?raw=1" target="_blank">source</a>{% if not loop.last %} · <a href="/compare?a={{ snaps[loop.index].id }}&b={{ s.id }}">diff</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="small dim">No local copy yet. Enable the Local snapshot service for this domain to keep one.</p>{% endif %}
+    </section>
+  </div>
+
+  <aside class="side">
+    <section style="margin-top:0">
+      <div class="section-head"><h2>Record</h2></div>
+      <dl class="facts">
+        <dt>Normalized</dt><dd class="mono small">{{ u.url }}</dd>
+        <dt>As found</dt><dd class="mono small">{{ u.original_url }}</dd>
+        <dt>First seen</dt><dd>{{ u.first_seen_at|dt }}{% if first_scan %} · scan #{{ first_scan.number }}{% endif %}</dd>
+        <dt>Last seen</dt><dd>{{ u.last_seen_at|dt }}{% if last_scan %} · scan #{{ last_scan.number }}{% endif %}</dd>
+        <dt>HTTP</dt><dd>{{ m.http(u) }}{% if u.redirects %} · {{ u.redirects }} redirect{{ 's' if u.redirects > 1 }}{% endif %}</dd>
+        {% if u.final_url %}<dt>Ends at</dt><dd class="mono small">{{ u.final_url }}</dd>{% endif %}
+        {% if u.canonical_url and u.canonical_url != u.url %}<dt>Canonical</dt><dd class="mono small">{{ u.canonical_url }}</dd>{% endif %}
+        {% if u.fetch_error %}<dt>Error</dt><dd style="color:var(--red)">{{ u.fetch_error }}</dd>{% endif %}
+        <dt>Type</dt><dd>{{ u.content_type or '—' }}{% if u.content_length %} · {{ (u.content_length / 1024)|round(1) }} KB{% endif %}</dd>
+        <dt>Response</dt><dd>{{ u.response_ms|num }} ms · fetched {{ u.fetched_at|ago }}</dd>
+        {% if u.content_hash %}<dt>Content</dt><dd class="mono small">{{ u.content_hash[:16] }}{% if u.changed_at %} · changed {{ u.changed_at|ago }}{% endif %}</dd>{% endif %}
+        {% if u.sitemap_lastmod %}<dt>Lastmod</dt><dd>{{ u.sitemap_lastmod }} (sitemap)</dd>{% endif %}
+        {% if u.depth is not none %}<dt>Depth</dt><dd>{{ u.depth }} click{{ 's' if u.depth != 1 }} from the start page</dd>{% endif %}
+        {% if u.skip_reason %}<dt>Excluded</dt><dd>{{ u.skip_reason }}</dd>{% endif %}
+      </dl>
+    </section>
+    <section>
+      <div class="section-head"><h2>Found via</h2></div>
+      {% for s in sources %}
+        <div class="small" style="padding:4px 0;border-bottom:1px dotted var(--rule-soft)"><b class="src">{{ s.source }}</b>{% if s.found_on %} <span class="dim">on</span> <span class="mono" style="overflow-wrap:anywhere">{{ s.found_on }}</span>{% endif %}</div>
+      {% endfor %}
+    </section>
+    <section>
+      <div class="section-head"><h2>Archive now</h2></div>
+      <form method="post" action="/urls/{{ u.id }}/archive">
+        {% for s in SERVICES %}<label class="check"><input type="checkbox" name="services" value="{{ s }}" {{ 'checked' if s in (d.services or '').split(',') }}><span>{{ s|svc }}</span></label>{% endfor %}
+        <label class="check"><input type="checkbox" name="priority" value="1" checked><span>Put it at the front of the queue</span></label>
+        <div class="actions" style="margin-top:10px"><button class="btn primary">Request a snapshot</button></div>
+      </form>
+      <form method="post" action="/urls/{{ u.id }}/priority" style="margin-top:12px"><button class="linkish small">{{ 'Clear the important flag' if u.priority > 0 else 'Always treat this URL as important' }}</button></form>
+      <div class="small" style="margin-top:16px">Look it up elsewhere:
+        {% for name, link in browse.items() if link %}<a href="{{ link }}" target="_blank" rel="noopener">{{ name|svc }} ↗</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

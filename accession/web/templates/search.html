@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% import "_m.html" as m %}
+{% block title %}Search · Accession{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <div class="kicker">Search the repository</div>
+    <h1>Has it been <em>kept?</em></h1>
+    <div class="sub">Paste a full URL to get a straight answer, or search part of an address or a domain name.</div>
+  </div>
+</div>
+
+<form class="filters" method="get" action="/search">
+  <label class="f grow"><span>URL or domain</span><input type="search" name="q" value="{{ q }}" placeholder="https://example.com/about  ·  /blog/  ·  example.com" autofocus></label>
+  <label class="f"><span>Domain</span><select name="domain"><option value="">all</option>{% for d in domains %}<option value="{{ d.id }}" {{ 'selected' if domain == d.id|string }}>{{ d.host }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Service</span><select name="service"><option value="">any</option>{% for s in SERVICES %}<option value="{{ s }}" {{ 'selected' if service == s }}>{{ s|svc }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Submission</span><select name="state">
+    {% for v, l in [('', 'any'), ('success', 'archived'), ('never', 'never archived'), ('queued', 'waiting'), ('failed', 'failed'), ('blocked', 'blocked')] %}<option value="{{ v }}" {{ 'selected' if state == v }}>{{ l }}</option>{% endfor %}</select></label>
+  <button class="btn primary">Search</button>
+</form>
+
+{% if exact %}
+  {% set ok = exact_history|selectattr('state', 'equalto', 'success')|list %}
+  <div class="answer">
+    {% if ok %}
+      <div class="yes">Yes, <em>archived {{ ok|length }} time{{ 's' if ok|length != 1 }}</em>.</div>
+      <p class="small" style="margin:8px 0 0">Latest: {{ ok[0].service|svc }}, {{ ok[0].finished_at|dt }} — <a class="mono" href="{{ ok[0].archive_url }}" target="_blank" rel="noopener">{{ ok[0].archive_url }}</a></p>
+    {% elif exact_history %}
+      <div class="yes no">Submitted, <em>not archived yet</em>.</div>
+      <p class="small" style="margin:8px 0 0">{{ exact_history|length }} submission{{ 's' if exact_history|length != 1 }}; latest is {{ exact_history[0].state }} at {{ exact_history[0].service|svc }}{% if exact_history[0].error %}: {{ exact_history[0].error }}{% endif %}.</p>
+    {% else %}
+      <div class="yes no">Known, <em>never submitted</em>.</div>
+      <p class="small" style="margin:8px 0 0">{{ 'Excluded: ' ~ exact.skip_reason if exact.skip_reason else 'It is in the inventory but nothing has been sent yet.' }}</p>
+    {% endif %}
+    <p class="small" style="margin:10px 0 0"><a href="/urls/{{ exact.id }}">Open the full record →</a></p>
+  </div>
+{% elif q and '/' in q and not results %}
+  <div class="answer"><div class="yes no">Not in the repository.</div><p class="small" style="margin:8px 0 0">No domain in the register has discovered this URL. Add its domain to start tracking it.</p></div>
+{% endif %}
+
+{% if results %}
+<div class="section-head"><h2>Results<span class="count">{{ total|num }}</span></h2></div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>URL</th><th>Domain</th><th>HTTP</th>{% for s in SERVICES %}<th>{{ s|svc }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for u in results %}{% set sb = subs.get(u.id, {}) %}
+    <tr>
+      <td>{{ m.url(u.url, '/urls/' ~ u.id, u.title) }}</td>
+      <td class="small nowrap"><a href="/domains/{{ u.domain_id }}">{{ u.host }}</a></td>
+      <td>{{ m.http(u) }}</td>
+      {% for s in SERVICES %}<td>{{ m.cell(sb.get(s)) }}</td>{% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ m.pager(p, pages, total, '/search?' ~ qs) }}
+{% elif q or service or state or domain %}
+  {% if not exact %}<div class="empty"><p>Nothing matches.</p></div>{% endif %}
+{% endif %}
+{% endblock %}

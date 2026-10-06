@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Accession</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css?v={{ ASSET_VERSION }}">
+<script>try{var t=localStorage.getItem("accession-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<div class="wrap" style="max-width:460px;padding-top:12vh">
+  <div class="masthead-main" style="padding-bottom:14px">
+    <span class="wordmark"><b>Accession</b><span>a register of things kept</span></span>
+  </div>
+  <form method="post" action="/login" style="margin-top:26px">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label class="f"><span>Password</span><input type="password" name="password" autofocus autocomplete="current-password" required></label>
+    {% if error %}<p class="small" style="color:var(--red);margin:8px 0 0">{{ error }}</p>{% elif flash %}<p class="small" style="margin:8px 0 0">{{ flash }}</p>{% endif %}
+    <div class="actions" style="margin-top:14px"><button class="btn primary">Sign in</button></div>
+  </form>
+  {% if PUBLIC %}
+  <p class="small dim" style="margin-top:40px">Only needed for owner actions: deleting domains and changing system settings. Everything else is open — <a href="/">back to the register</a>.</p>
+  {% else %}
+  <p class="small dim" style="margin-top:40px">This register is private. Ask its owner for the password.</p>
+  {% endif %}
+</div>
+</body>
+</html>

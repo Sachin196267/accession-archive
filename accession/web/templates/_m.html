@@ -1,0 +1,40 @@
+{% macro tag(state, live=None) -%}
+<span class="tag" data-s="{{ state }}"{% if live %} data-st="{{ live }}" data-k="{{ live }}"{% endif %}>{{ state }}</span>
+{%- endmacro %}
+
+{% macro http(u) -%}
+{% if u.fetch_error %}<span class="http" data-c="e" title="{{ u.fetch_error }}">ERR</span>
+{%- elif u.http_status %}<span class="http" data-c="{{ (u.http_status|string)[0] }}">{{ u.http_status }}{% if u.final_status and u.final_status != u.http_status %}→{{ u.final_status }}{% endif %}</span>
+{%- else %}<span class="dim">—</span>{% endif %}
+{%- endmacro %}
+
+{% macro url(href, link=None, title=None) -%}
+{% set o, rest = href|split_url %}<span class="url">{% if link %}<a href="{{ link }}">{% endif %}<span class="o">{{ o }}</span>{{ rest }}{% if link %}</a>{% endif %}</span>
+{%- if title %}<div class="title-line">{{ title }}</div>{% endif %}
+{%- endmacro %}
+
+{% macro cell(sub) -%}
+{% if not sub %}<span class="cell" data-s="none">·</span>
+{%- else %}{% set good = sub.good %}
+<span class="cell" data-s="{{ sub.state }}" title="{{ sub.error or '' }}">
+{%- if sub.state == 'success' %}<a href="{{ sub.archive_url }}" target="_blank" rel="noopener">✓ {{ sub.finished_at|dt('%d %b') }}{% if sub.ok_count > 1 %} ×{{ sub.ok_count }}{% endif %}</a>
+{%- elif sub.state == 'blocked' %}<a href="{{ sub.manual_url }}" target="_blank" rel="noopener">blocked ↗</a>
+{%- elif sub.state == 'retry' %}retrying
+{%- elif sub.state == 'running' %}working
+{%- else %}{{ sub.state }}{% endif %}
+{%- if good and sub.state != 'success' %} <a href="{{ good.archive_url }}" target="_blank" rel="noopener" class="dim" title="previous capture">(✓ prev)</a>{% endif %}
+</span>
+{%- endif %}
+{%- endmacro %}
+
+{% macro pager(p, pages, total, base) -%}
+{% if pages > 1 %}
+<div class="pager">
+  <span>Page {{ p }} of {{ pages|num }} · {{ total|num }} rows</span>
+  <span class="actions">
+    {% if p > 1 %}<a class="btn tiny quiet" href="{{ base }}&p=1">First</a><a class="btn tiny quiet" href="{{ base }}&p={{ p - 1 }}">← Previous</a>{% endif %}
+    {% if p < pages %}<a class="btn tiny quiet" href="{{ base }}&p={{ p + 1 }}">Next →</a><a class="btn tiny quiet" href="{{ base }}&p={{ pages }}">Last</a>{% endif %}
+  </span>
+</div>
+{% endif %}
+{%- endmacro %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% import "_m.html" as m %}
+{% block title %}System · Accession{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <div class="kicker">Configuration</div>
+    <h1>System</h1>
+    <div class="sub">Pacing, retries and credentials for the archive services. Changes apply to the running workers within a few seconds.</div>
+  </div>
+</div>
+
+<div class="cols">
+  <form method="post" action="/system">
+    <h3>Internet Archive keys</h3>
+    <p class="small dim" style="margin-top:0">Strongly recommended. Save Page Now’s API answers anonymous clients with “You need to be logged in”, so without keys Wayback submissions may end up in the review list. Free S3-style keys come from <a href="https://archive.org/account/s3.php" target="_blank" rel="noopener">archive.org/account/s3.php</a>.
+      {% if has_keys %}<br><b style="color:var(--green)">Keys are set{{ ' (from environment variables)' if keys_from_env }}.</b>{% endif %}</p>
+    <div class="grid">
+      <label class="f"><span>Access key</span><input type="text" name="ia_access_key" autocomplete="off" placeholder="{{ 'saved — leave empty to keep' if has_keys else '' }}"></label>
+      <label class="f"><span>Secret key</span><input type="password" name="ia_secret_key" autocomplete="new-password" placeholder="{{ 'saved — leave empty to keep' if has_keys else '' }}"></label>
+    </div>
+    {% if has_keys and not keys_from_env %}<label class="check" style="margin-top:6px"><input type="checkbox" name="clear_keys" value="1"><span>Remove the saved keys</span></label>{% endif %}
+
+    <fieldset><legend>Queue &amp; services</legend>
+      <div class="grid">
+        {% for key, label, kind in fields %}
+        <label class="f"><span>{{ label }}</span><input type="{{ 'text' if kind == 'str' else 'number' }}" {% if kind == 'float' %}step="any"{% endif %} name="{{ key }}" value="{{ s[key] }}"></label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <div class="actions" style="margin-top:18px">{% if is_owner %}<button class="btn primary">Save</button>{% else %}<span class="small dim">Only the owner can change these settings. <a href="/login?next=/system">Owner sign in</a></span>{% endif %}</div>
+  </form>
+
+  <aside class="side">
+    <section style="margin-top:0">
+      <div class="section-head"><h2>Repository</h2></div>
+      <dl class="facts">
+        <dt>Database</dt><dd class="mono small">{{ db_path }}</dd>
+        <dt>Size</dt><dd>{{ (db_size / 1048576)|round(2) }} MB</dd>
+        <dt>Snapshots</dt><dd class="mono small">{{ snap_dir }}</dd>
+        <dt>Stored</dt><dd>{{ (snap_size / 1048576)|round(2) }} MB compressed</dd>
+        {% for t, n in counts.items() %}<dt>{{ t.replace('_', ' ') }}</dt><dd>{{ n|num }}</dd>{% endfor %}
+      </dl>
+      <div class="actions" style="margin-top:14px"><a class="btn tiny" href="/export/all.csv">Export CSV</a><a class="btn tiny" href="/export/all.json">Export JSON</a></div>
+    </section>
+    <section>
+      <div class="section-head"><h2>Browser rendering</h2></div>
+      {% if render_available %}
+        <p class="small" style="margin:0">Playwright is installed. Domains with “Render JavaScript” on are crawled and captured in headless Chromium.</p>
+      {% else %}
+        <p class="small" style="margin:0">Playwright is not installed, so pages are read as the server sends them. To add it:</p>
+        <pre class="mono small" style="background:var(--paper-2);padding:10px;white-space:pre-wrap">pip install playwright
+playwright install chromium</pre>
+      {% endif %}
+    </section>
+    <section>
+      <div class="section-head"><h2>Workers</h2></div>
+      {% for w in workers %}
+        {% set alive = not w.stopped_at and w.heartbeat_at >= now - stale %}
+        <div class="small" style="padding:4px 0;border-bottom:1px dotted var(--rule-soft);display:flex;justify-content:space-between;gap:10px"><span class="mono">{{ w.id }}</span>{{ m.tag('running' if alive else (w.status or 'stopped')) }}</div>
+      {% endfor %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% import "_m.html" as m %}
+{% block title %}Queue · Accession{% endblock %}
+{% block live %}data-live="/api/live"{% endblock %}
+{% block notebar %}The queue moved on. <a href="/queue">Refresh</a>{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <div class="kicker">Combined submission queue</div>
+    <h1>The queue{% if engine.paused %} <em>is paused</em>{% endif %}</h1>
+    <div class="sub">All domains share one queue. Important URLs go first, then domains take turns, so one big site can’t hold up the rest. Each service has its own pace.</div>
+  </div>
+  <div class="actions">
+    <form method="post" action="/queue/toggle"><button class="btn {{ 'primary' if engine.paused }}">{{ 'Resume the queue' if engine.paused else 'Pause the queue' }}</button></form>
+    <a class="btn quiet" href="/queue">Refresh</a>
+  </div>
+</div>
+
+<div class="ledger">
+  <div><div class="l">Waiting</div><div class="v" data-k="t-queued">{{ totals.queued|num }}</div></div>
+  <div><div class="l">Working now</div><div class="v">{{ running|length }}</div></div>
+  <div><div class="l">Archived</div><div class="v green" data-k="t-success">{{ totals.success|num }}</div></div>
+  <div><div class="l">Need review</div><div class="v{{ ' red' if review_total }}">{{ review_total|num }}</div></div>
+  <div><div class="l">Pages / min</div><div class="v" data-k="tp-pages">{{ tp.pages_per_min|num }}</div></div>
+  <div><div class="l">Captures / hour</div><div class="v" data-k="tp-caps">{{ tp.captures_per_hour|num }}</div></div>
+</div>
+
+<section>
+  <div class="section-head"><h2>Services</h2></div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Service</th><th>Mode</th><th>Pace</th><th class="num">Waiting</th><th class="num">Archived</th><th class="num">Failed</th><th class="num">Avg time</th><th class="num">Slowest</th><th>Health</th><th></th></tr></thead>
+    <tbody>
+    {% for s in services %}
+    <tr>
+      <td><b>{{ s.label }}</b><div class="small dim">{{ s.description }}</div></td>
+      <td class="small">{{ s.mode }}</td>
+      <td class="small nowrap">{{ s.concurrency }} at a time{% if s.interval %}, 1 per {{ s.interval|round(1) }} s{% endif %}</td>
+      <td class="num">{{ (s.counts.get('queued', 0) + s.counts.get('retry', 0))|num }}</td>
+      <td class="num">{{ s.counts.get('success', 0)|num }}</td>
+      <td class="num">{{ (s.counts.get('failed', 0) + s.counts.get('blocked', 0))|num }}</td>
+      <td class="num">{{ (s.avg_ms / 1000)|dur if s.avg_ms else '—' }}</td>
+      <td class="num">{{ (s.max_ms / 1000)|dur if s.max_ms else '—' }}</td>
+      <td class="small">{% if not s.enabled %}{{ m.tag('off') }}{% elif s.cooldown_until %}<span class="tag" data-s="paused">cooling down</span><div class="dim">until {{ s.cooldown_until|dt('%H:%M') }} · {{ s.last_error }}</div>{% else %}<span class="dim">last ok {{ s.last_ok_at|ago }}</span>{% endif %}</td>
+      <td class="nowrap">
+        {% if s.cooldown_until %}<form method="post" action="/services/{{ s.name }}/resume" style="display:inline"><button class="linkish small">resume now</button></form> · {% endif %}
+        <form method="post" action="/services/{{ s.name }}/toggle" style="display:inline"><button class="linkish small">{{ 'disable' if s.enabled else 'enable' }}</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<div class="cols even">
+  <section>
+    <div class="section-head"><h2>Working now<span class="count">{{ running|length }}</span></h2></div>
+    {% for s in running %}
+      <div style="padding:7px 0;border-bottom:1px solid var(--rule-soft)">{{ m.url(s.url, '/urls/' ~ s.url_id) }}
+        <div class="small dim">{{ s.service|svc }} · attempt {{ s.attempts }} · started {{ s.last_attempt_at|ago }}{% if s.job_id %} · job <span class="mono">{{ s.job_id[:18] }}</span>{% endif %} · {{ s.worker }}</div></div>
+    {% else %}<p class="small dim">Nothing is being submitted right now.</p>{% endfor %}
+
+    <div class="section-head" style="margin-top:30px"><h2>Up next</h2></div>
+    {% for s in upcoming %}
+      <div style="padding:5px 0;border-bottom:1px dotted var(--rule-soft)" class="small">{% if s.priority > 0 %}<b style="color:var(--red)">!</b> {% endif %}{{ m.url(s.url, '/urls/' ~ s.url_id) }} <span class="dim">· {{ s.service|svc }}</span></div>
+    {% else %}<p class="small dim">The queue is empty.</p>{% endfor %}
+  </section>
+  <section>
+    <div class="section-head"><h2>By domain</h2></div>
+    {% if per_domain %}
+    <table>
+      <thead><tr><th>Domain</th><th class="num">Waiting</th><th class="num">Retrying</th><th class="num">Working</th></tr></thead>
+      <tbody>{% for r in per_domain %}<tr><td><a href="/domains/{{ r.id }}">{{ r.host }}</a>{% if r.paused %} <span class="tag" data-s="paused">paused</span>{% endif %}</td><td class="num">{{ r.q|num }}</td><td class="num">{{ r.r|num }}</td><td class="num">{{ r.run|num }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<p class="small dim">No domain has work waiting.</p>{% endif %}
+
+    <div class="section-head" style="margin-top:30px"><h2>Retrying<span class="count">{{ retrying|length }}</span></h2></div>
+    {% for s in retrying %}
+      <div style="padding:5px 0;border-bottom:1px dotted var(--rule-soft)" class="small">{{ m.url(s.url, '/urls/' ~ s.url_id) }}
+        <div class="dim">{{ s.service|svc }} · try {{ s.attempts + 1 }} {{ s.next_attempt_at|ago }} · {{ s.error }}</div></div>
+    {% else %}<p class="small dim">No temporary failures waiting for another try.</p>{% endfor %}
+  </section>
+</div>
+
+<section>
+  <div class="section-head"><h2>Needs review<span class="count">{{ review_total|num }}</span></h2>
+    {% if review_total %}<form method="post" action="/queue/retry-all"><button class="btn tiny" data-confirm="Put every failed and blocked submission back in the queue?">Retry all</button></form>{% endif %}</div>
+  <p class="small dim" style="margin-top:-4px">Submissions that ran out of attempts, hit a permanent error, or were stopped by a CAPTCHA. They stay here until you retry them, record a link by hand, or cancel them.</p>
+  {% if review %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>When</th><th>URL</th><th>Service</th><th>State</th><th>Reason</th><th></th></tr></thead>
+    <tbody>
+    {% for s in review %}
+    <tr>
+      <td class="when">{{ s.finished_at|dt('%d %b %H:%M') }}</td>
+      <td>{{ m.url(s.url, '/urls/' ~ s.url_id) }}<div class="small dim">{{ s.host }}</div></td>
+      <td class="small nowrap">{{ s.service|svc }}</td>
+      <td>{{ m.tag(s.state) }}</td>
+      <td class="small">{{ s.error }}</td>
+      <td class="nowrap">
+        {% if s.manual_url %}<a class="btn tiny" href="{{ s.manual_url }}" target="_blank" rel="noopener">Submit by hand ↗</a>{% endif %}
+        <form method="post" action="/submissions/{{ s.id }}/retry" style="display:inline"><button class="btn tiny quiet">Retry</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<div class="empty"><p>Nothing needs attention.</p></div>{% endif %}
+</section>
+
+<div class="cols even">
+  <section>
+    <div class="section-head"><h2>Slowest pages</h2></div>
+    {% for r in slow_urls %}<div class="small" style="padding:4px 0;border-bottom:1px dotted var(--rule-soft);display:flex;justify-content:space-between;gap:12px">{{ m.url(r.url, '/urls/' ~ r.id) }}<span class="mono nowrap">{{ r.response_ms|num }} ms</span></div>
+    {% else %}<p class="small dim">No pages fetched yet.</p>{% endfor %}
+  </section>
+  <section>
+    <div class="section-head"><h2>Slowest captures</h2></div>
+    {% for r in slow_subs %}<div class="small" style="padding:4px 0;border-bottom:1px dotted var(--rule-soft);display:flex;justify-content:space-between;gap:12px">{{ m.url(r.url, '/urls/' ~ r.url_id) }}<span class="mono nowrap">{{ r.service|svc }} · {{ (r.duration_ms / 1000)|dur }}</span></div>
+    {% else %}<p class="small dim">No captures yet.</p>{% endfor %}
+  </section>
+</div>
+
+<section>
+  <div class="section-head"><h2>Workers</h2></div>
+  <table>
+    <thead><tr><th>Worker</th><th>Role</th><th>Started</th><th>Heartbeat</th><th>State</th></tr></thead>
+    <tbody>{% for w in workers %}
+      {% set alive = not w.stopped_at and w.heartbeat_at >= now - stale %}
+      <tr><td class="mono small">{{ w.id }}</td><td class="small">{{ w.role }}</td><td class="when">{{ w.started_at|dt }}</td><td class="when">{{ w.heartbeat_at|ago }}</td><td>{{ m.tag('running' if alive else (w.status or 'stopped')) }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  <p class="small dim">Run more with <code>python -m accession worker</code>. They share this database; a worker that stops sending heartbeats has its work handed to the others within {{ stale }} seconds.</p>
+</section>
+{% endblock %}

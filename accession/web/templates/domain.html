@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% import "_m.html" as m %}
+{% block title %}{{ d.host }} · Accession{% endblock %}
+{% block live %}data-live="/api/live?domain={{ d.id }}"{% endblock %}
+{% block notebar %}The scan state changed. <a href="">Refresh to see the new inventory</a>{% endblock %}
+{% block content %}
+
+<div class="head">
+  <div>
+    <div class="kicker"><a href="/">Register</a> / domain {{ '%03d' % d.id }}</div>
+    <h1>{{ d.host }}</h1>
+    <div class="sub">
+      {{ m.tag(ov.status, 'o-status') }}
+      <span class="sep">|</span><a href="{{ d.root_url }}" target="_blank" rel="noopener" class="mono">{{ d.root_url }}</a>
+      <span class="sep">|</span>added {{ d.created_at|dt('%d %b %Y') }}
+      {% if d.rescan_hours %}<span class="sep">|</span>rescans every {{ d.rescan_hours|round(1) }} h, next {{ d.next_scan_at|ago }}{% endif %}
+      {% if d.paused %}<span class="sep">|</span><b>submissions paused</b>{% endif %}
+    </div>
+  </div>
+  <div class="actions">
+    {% if current %}
+      <form method="post" action="/domains/{{ d.id }}/cancel"><button class="btn" data-confirm="Stop this scan? URLs found so far are kept.">Stop scan</button></form>
+    {% else %}
+      <form method="post" action="/domains/{{ d.id }}/scan"><button class="btn primary">{{ 'Scan again' if scans else 'Start first scan' }}</button></form>
+    {% endif %}
+    <form method="post" action="/domains/{{ d.id }}/archive"><button class="btn">Archive new URLs</button></form>
+    <form method="post" action="/domains/{{ d.id }}/pause"><button class="btn quiet">{{ 'Resume' if d.paused else 'Pause' }}</button></form>
+  </div>
+</div>
+
+<div class="ledger">
+  <div><div class="l">URLs</div><div class="v" data-k="o-urls">{{ ov.urls|num }}</div><div class="n">{{ ov.archivable|num }} archivable</div></div>
+  <div><div class="l">Queued</div><div class="v" data-k="o-queued">{{ ov.queued|num }}</div><div class="n"><span data-k="o-running">{{ ov.running|num }}</span> working</div></div>
+  <div><div class="l">Submitted</div><div class="v" data-k="o-submitted">{{ ov.submitted|num }}</div></div>
+  <div><div class="l">Archived</div><div class="v green" data-k="o-success">{{ ov.success|num }}</div></div>
+  <div><div class="l">Failed</div><div class="v{{ ' red' if ov.failed }}" data-k="o-failed">{{ ov.failed|num }}</div><div class="n"><span data-k="o-blocked">{{ ov.blocked|num }}</span> blocked</div></div>
+  <div><div class="l">Last scan</div><div class="v small" data-k="o-last_scan">{{ d.last_scan_at|ago }}</div><div class="n">{{ scans|length }} scan{{ 's' if scans|length != 1 }} so far</div></div>
+  <div><div class="l">Last submission</div><div class="v small" data-k="o-last_submission">{{ d.last_submission_at|ago }}</div></div>
+</div>
+
+<div class="cols even" style="margin-top:22px">
+  <div>
+    <h3>Discovery</h3>
+    {% if progress %}
+    <div class="progress">
+      <div class="track"><div class="fill" data-bar="scan" style="width:{{ progress.pct }}%"></div></div>
+      <div class="meta"><span>Scan #{{ current.number }} · <span data-k="p-done">{{ progress.done|num }}</span> of <span data-k="p-total">{{ progress.total|num }}</span> frontier items</span>
+        <span><span data-k="p-fetched">{{ current.pages_fetched|num }}</span> pages · <span data-k="p-rate">{{ progress.rate|round|int }}</span>/min · <span data-k="p-elapsed">{{ progress.elapsed|dur }}</span></span></div>
+    </div>
+    {% elif scans %}
+      {% set s = scans[0] %}
+      <p class="small" style="margin:0">Scan #{{ s.number }} {{ s.state }} {{ s.finished_at|ago }}: {{ s.urls_seen|num }} URLs seen, <a href="?scan={{ s.id }}">{{ s.urls_new|num }} new</a>{% if s.number > 1 %}, <a href="?seen=missing">{{ s.urls_missing|num }} no longer linked</a>, <a href="?seen=changed">{{ s.urls_changed|num }} changed</a>{% endif %}{% if s.capped %} (page limit reached){% endif %}.</p>
+    {% else %}
+      <p class="small dim" style="margin:0">Not scanned yet.</p>
+    {% endif %}
+  </div>
+  <div>
+    <h3>Archiving</h3>
+    {% set fin = counts._all.get('success', 0) + counts._all.get('failed', 0) + counts._all.get('blocked', 0) %}
+    {% set tot = fin + counts._all.get('queued', 0) + counts._all.get('retry', 0) + counts._all.get('running', 0) %}
+    <div class="progress">
+      <div class="track"><div class="fill" data-bar="archive" style="width:{{ (100 * fin / tot) if tot else 0 }}%"></div></div>
+      <div class="meta"><span><span data-k="a-done">{{ fin|num }}</span> of <span data-k="a-total">{{ tot|num }}</span> submissions finished</span>
+      <span>{% for s in services %}{{ s|svc }}{% if not loop.last %} · {% endif %}{% endfor %}</span></div>
+    </div>
+  </div>
+</div>
+
+<nav class="tabs">
+  <a href="?tab=inventory" class="{{ 'on' if tab == 'inventory' }}">Inventory<span class="count">{{ ov.urls|num }}</span></a>
+  <a href="?tab=services" class="{{ 'on' if tab == 'services' }}">Services</a>
+  <a href="?tab=history" class="{{ 'on' if tab == 'history' }}">Submission history</a>
+  <a href="?tab=scans" class="{{ 'on' if tab == 'scans' }}">Scans<span class="count">{{ scans|length }}</span></a>
+  <a href="?tab=activity" class="{{ 'on' if tab == 'activity' }}">Activity</a>
+  <a href="?tab=settings" class="{{ 'on' if tab == 'settings' }}">Settings</a>
+</nav>
+
+{% if tab == 'inventory' %}
+<form class="filters" method="get">
+  <input type="hidden" name="tab" value="inventory">
+  <label class="f grow"><span>URL contains</span><input type="search" name="q" value="{{ f.q }}" placeholder="/blog/"></label>
+  <label class="f"><span>Found via</span><select name="source"><option value="">any source</option>{% for s in sources %}<option {{ 'selected' if f.source == s }}>{{ s }}</option>{% endfor %}</select></label>
+  <label class="f"><span>HTTP</span><select name="http">
+    {% for v, l in [('', 'any status'), ('2', '2xx ok'), ('3', '3xx redirect'), ('4', '4xx'), ('5', '5xx'), ('error', 'fetch error'), ('none', 'not fetched')] %}<option value="{{ v }}" {{ 'selected' if f.http == v }}>{{ l }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Archive state</span><select name="archive">
+    {% for v, l in [('', 'any'), ('archived', 'archived'), ('never', 'never archived'), ('queued', 'waiting'), ('failed', 'failed'), ('blocked', 'blocked'), ('skipped', 'excluded')] %}<option value="{{ v }}" {{ 'selected' if f.archive == v }}>{{ l }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Service</span><select name="service"><option value="">any</option>{% for s in SERVICES %}<option value="{{ s }}" {{ 'selected' if f.service == s }}>{{ s|svc }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Scan</span><select name="scan"><option value="">all scans</option>{% for s in scans %}<option value="{{ s.id }}" {{ 'selected' if f.scan == s.id|string }}>new in #{{ s.number }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Inventory</span><select name="seen">
+    {% for v, l in [('', 'everything'), ('missing', 'no longer linked'), ('changed', 'content changed'), ('external', 'external')] %}<option value="{{ v }}" {{ 'selected' if f.seen == v }}>{{ l }}</option>{% endfor %}</select></label>
+  <button class="btn">Filter</button>
+  {% if filters_qs %}<a class="btn quiet" href="?tab=inventory">Clear</a>{% endif %}
+</form>
+
+{% if rows %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>#</th><th>URL</th><th>Found via</th><th>HTTP</th><th class="hide-sm">Scan</th>
+    {% for s in SERVICES %}<th>{{ s|svc }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for u in rows %}
+    {% set sb = subs.get(u.id, {}) %}
+    <tr>
+      <td class="idx">{{ offset + loop.index }}</td>
+      <td>{{ m.url(u.url, '/urls/' ~ u.id, u.title) }}
+        {% if u.skip_reason %}<div class="title-line dim">excluded: {{ u.skip_reason }}</div>{% endif %}
+        {% if u.final_url %}<div class="title-line dim">→ {{ u.final_url }}</div>{% endif %}</td>
+      <td class="src">{{ u.source }}</td>
+      <td>{{ m.http(u) }}</td>
+      <td class="when hide-sm">#{{ u.scan_no }}</td>
+      {% for s in SERVICES %}<td>{{ m.cell(sb.get(s)) }}</td>{% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ m.pager(p, pages, total, '?tab=inventory&' ~ filters_qs) }}
+{% else %}
+<div class="empty"><p>{{ 'No URL matches these filters.' if filters_qs else 'Nothing discovered yet — start a scan.' }}</p></div>
+{% endif %}
+
+{% elif tab == 'services' %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Service</th><th class="num">Queued</th><th class="num">Working</th><th class="num">Retrying</th><th class="num">Archived</th><th class="num">Failed</th><th class="num">Blocked</th><th></th></tr></thead>
+  <tbody>
+  {% for s in SERVICES %}{% set c = counts.get(s, {}) %}
+    <tr>
+      <td><b>{{ s|svc }}</b>{% if s in services %} <span class="dim small">· enabled for this domain</span>{% endif %}</td>
+      <td class="num" data-k="s-{{ s }}-queued">{{ c.get('queued', 0)|num }}</td>
+      <td class="num" data-k="s-{{ s }}-running">{{ c.get('running', 0)|num }}</td>
+      <td class="num" data-k="s-{{ s }}-retry">{{ c.get('retry', 0)|num }}</td>
+      <td class="num" data-k="s-{{ s }}-success">{{ c.get('success', 0)|num }}</td>
+      <td class="num" data-k="s-{{ s }}-failed">{{ c.get('failed', 0)|num }}</td>
+      <td class="num" data-k="s-{{ s }}-blocked">{{ c.get('blocked', 0)|num }}</td>
+      <td class="nowrap"><a class="small" href="?tab=inventory&service={{ s }}&archive=archived">archived URLs</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="cols even" style="margin-top:30px">
+  <form method="post" action="/domains/{{ d.id }}/archive">
+    <h3>Submit what has never been sent</h3>
+    <p class="small dim" style="margin-top:0">Only URLs with no earlier submission to the chosen service are queued. Nothing is sent twice by accident.</p>
+    {% for s in SERVICES %}<label class="check"><input type="checkbox" name="services" value="{{ s }}" {{ 'checked' if s in services }}><span>{{ s|svc }}</span></label>{% endfor %}
+    <div class="actions" style="margin-top:10px"><button class="btn primary">Queue new URLs</button></div>
+  </form>
+  <form method="post" action="/domains/{{ d.id }}/rearchive">
+    <h3>Ask for a fresh snapshot</h3>
+    <p class="small dim" style="margin-top:0">Adds a new entry to each URL's history, even if it was archived before.</p>
+    {% for s in SERVICES %}<label class="check"><input type="checkbox" name="services" value="{{ s }}" {{ 'checked' if s in services }}><span>{{ s|svc }}</span></label>{% endfor %}
+    <label class="f" style="margin-top:8px;max-width:320px"><span>Which URLs</span><select name="scope"><option value="changed">Only pages that changed in the last scan</option><option value="all">Every archivable URL</option></select></label>
+    <div class="actions" style="margin-top:10px"><button class="btn" data-confirm="Request new snapshots?">Re-archive</button></div>
+  </form>
+</div>
+<div class="actions" style="margin-top:26px">
+  <form method="post" action="/domains/{{ d.id }}/retry"><button class="btn quiet">Retry failed &amp; blocked</button></form>
+  <form method="post" action="/domains/{{ d.id }}/clear"><button class="btn quiet" data-confirm="Cancel every waiting submission for this domain?">Cancel waiting submissions</button></form>
+  <a class="btn quiet" href="/export/{{ d.id }}.csv">Export CSV</a>
+  <a class="btn quiet" href="/export/{{ d.id }}.json">Export JSON</a>
+</div>
+
+{% elif tab == 'history' %}
+<form class="filters" method="get"><input type="hidden" name="tab" value="history">
+  <label class="f"><span>State</span><select name="state" onchange="this.form.submit()">
+  {% for v in ['', 'success', 'failed', 'blocked', 'retry', 'running', 'queued', 'cancelled'] %}<option value="{{ v }}" {{ 'selected' if state == v }}>{{ v or 'every state' }}</option>{% endfor %}</select></label>
+  <noscript><button class="btn">Filter</button></noscript>
+</form>
+{% if history %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When</th><th>URL</th><th>Service</th><th>State</th><th>Why</th><th class="num">Tries</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for s in history %}
+  <tr>
+    <td class="when">{{ (s.finished_at or s.last_attempt_at or s.created_at)|dt('%d %b %H:%M') }}</td>
+    <td>{{ m.url(s.url, '/urls/' ~ s.url_id) }}</td>
+    <td class="small nowrap">{{ s.service|svc }}</td>
+    <td>{{ m.tag(s.state) }}</td>
+    <td class="small dim">{{ s.reason }}</td>
+    <td class="num">{{ s.attempts }}</td>
+    <td class="small">{% if s.archive_url %}<a class="mono" href="{{ s.archive_url }}" target="_blank" rel="noopener">{{ s.archive_id or 'open' }} ↗</a>{% elif s.error %}<span class="dim">{{ s.error }}</span>{% endif %}
+      {% if s.state == 'retry' %}<div class="dim">next try {{ s.next_attempt_at|ago }}</div>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ m.pager(p, pages, total, '?tab=history&state=' ~ state) }}
+{% else %}<div class="empty"><p>No submissions{{ ' in this state' if state }}.</p></div>{% endif %}
+
+{% elif tab == 'scans' %}
+{% if scans %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Scan</th><th>Started</th><th>State</th><th class="num">Took</th><th class="num">Pages</th><th class="num">304</th><th class="num">Seen</th><th class="num">New</th><th class="num">Missing</th><th class="num">Changed</th><th class="num">Errors</th><th class="num">Speed</th></tr></thead>
+  <tbody>
+  {% for s in scans %}{% set took = ((s.finished_at or s.started_at) - s.started_at) %}
+  <tr>
+    <td class="nowrap"><b>#{{ s.number }}</b> <span class="dim small">{{ s.trigger }}</span></td>
+    <td class="when">{{ s.started_at|dt }}</td>
+    <td>{{ m.tag(s.state) }}{% if s.capped %} <span class="small dim">capped</span>{% endif %}</td>
+    <td class="num">{{ took|dur if s.finished_at else '…' }}</td>
+    <td class="num">{{ s.pages_fetched|num }}</td>
+    <td class="num" title="not modified since the last visit">{{ s.not_modified|num }}</td>
+    <td class="num">{{ s.urls_seen|num }}</td>
+    <td class="num"><a href="?scan={{ s.id }}">{{ s.urls_new|num }}</a></td>
+    <td class="num">{{ s.urls_missing|num }}</td>
+    <td class="num">{{ s.urls_changed|num }}</td>
+    <td class="num">{{ s.errors|num }}</td>
+    <td class="num">{% if s.finished_at and took > 0 %}{{ (s.pages_fetched / took * 60)|round|int }}/min{% else %}—{% endif %}</td>
+  </tr>
+  {% if s.note %}<tr><td></td><td colspan="11" class="small dim">{{ s.note }}</td></tr>{% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="small dim">“Missing” counts URLs found by an earlier scan that nothing links to any more. They stay in the repository with their archive history.</p>
+{% else %}<div class="empty"><p>No scans yet.</p></div>{% endif %}
+
+{% elif tab == 'activity' %}
+<div class="log" style="max-height:none" data-html="log">{% with show_host = false %}{% include "_log.html" %}{% endwith %}</div>
+
+{% elif tab == 'settings' %}
+<form method="post" action="/domains/{{ d.id }}/settings" style="max-width:900px">
+  <h3>Archive services</h3>
+  {% for s in SERVICES %}<label class="check"><input type="checkbox" name="services" value="{{ s }}" {{ 'checked' if s in services }}><span>{{ s|svc }}</span></label>{% endfor %}
+  <fieldset><legend>Crawl</legend>
+    <div class="grid">
+      <label class="f"><span>Page limit</span><input type="number" name="max_pages" value="{{ d.max_pages }}" min="1"></label>
+      <label class="f"><span>Link depth</span><input type="number" name="max_depth" value="{{ d.max_depth }}" min="0"></label>
+      <label class="f"><span>Parallel requests</span><input type="number" name="crawl_concurrency" value="{{ d.crawl_concurrency }}" min="1" max="32"></label>
+      <label class="f"><span>External links</span><select name="external_mode">
+        {% for v, l in [('ignore', 'Ignore them'), ('record', "Record, don't archive"), ('archive', 'Record and archive (no crawl)')] %}<option value="{{ v }}" {{ 'selected' if d.external_mode == v }}>{{ l }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <label class="check"><input type="checkbox" name="include_subdomains" value="1" {{ 'checked' if d.include_subdomains }}><span>Include subdomains</span></label>
+      <label class="check"><input type="checkbox" name="respect_robots" value="1" {{ 'checked' if d.respect_robots }}><span>Respect robots.txt</span></label>
+      <label class="check"><input type="checkbox" name="render_js" value="1" {{ 'checked' if d.render_js }} {% if not render_available %}disabled{% endif %}><span>Render JavaScript<small>{{ 'Playwright found' if render_available else 'install Playwright to enable' }}</small></span></label>
+    </div>
+  </fieldset>
+  <fieldset><legend>Automation</legend>
+    <div class="grid">
+      <label class="f"><span>Rescan every (hours)</span><input type="number" name="rescan_hours" min="1" step="0.5" value="{{ d.rescan_hours if d.rescan_hours else '' }}" placeholder="off"></label>
+      <label class="f"><span>Queue priority</span><input type="number" name="priority" value="{{ d.priority }}"><span class="hint">Higher goes first in the combined queue</span></label>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <label class="check"><input type="checkbox" name="auto_archive" value="1" {{ 'checked' if d.auto_archive }}><span>Queue new URLs automatically</span></label>
+      <label class="check"><input type="checkbox" name="rearchive_on_change" value="1" {{ 'checked' if d.rearchive_on_change }}><span>Re-archive pages whose content changed<small>compared by content hash between scans</small></span></label>
+    </div>
+  </fieldset>
+  <div class="actions" style="margin-top:18px"><button class="btn primary">Save settings</button></div>
+</form>
+
+{% if is_owner %}<form method="post" action="/domains/{{ d.id }}/delete" style="max-width:520px;margin-top:46px;border-top:1px solid var(--red);padding-top:14px">
+  <h3 style="color:var(--red)">Remove from the register</h3>
+  <p class="small dim" style="margin-top:0">Deletes the inventory and the archive history kept here. Captures already made at the archive services are not affected.</p>
+  <label class="f"><span>Type <b class="mono">{{ d.host }}</b> to confirm</span><input type="text" name="confirm" autocomplete="off"></label>
+  <div class="actions" style="margin-top:10px"><button class="btn danger">Delete domain</button></div>
+</form>{% endif %}
+{% endif %}
+
+{% endblock %}

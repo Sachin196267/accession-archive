@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Accession{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css?v={{ ASSET_VERSION }}">
+<script>try{var t=localStorage.getItem("accession-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231d1c19'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' fill='%23f4f1ea' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+</head>
+<body {% block live %}{% endblock %}{% if SERVERLESS %} data-tick="/api/tick"{% endif %}>
+<div class="wrap">
+  <header class="masthead">
+    <div class="masthead-top">
+      <span class="date">Website archive &amp; backup register · {{ today() }}</span>
+      <span class="engine" data-st="engine" data-state="{{ 'ok' if engine.workers or engine.serverless else 'down' }}"><i></i><span data-k="engine">{{ engine_line(engine) }}</span></span>
+    </div>
+    <div class="masthead-main">
+      <a class="wordmark" href="/"><b>Accession</b><span>a register of things kept</span></a>
+      <nav class="main">
+        <a href="/" class="{{ 'on' if nav == 'register' }}">Register</a>
+        <a href="/queue" class="{{ 'on' if nav == 'queue' }}">Queue</a>
+        <a href="/search" class="{{ 'on' if nav == 'search' }}">Search</a>
+        <a href="/system" class="{{ 'on' if nav == 'system' }}">System</a>
+      </nav>
+    </div>
+  </header>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  {% block content %}{% endblock %}
+  <footer class="footer">
+    <span>Accession {{ VERSION }} · SQLite repository · <a href="/api/docs">API</a> · <a href="/export/all.csv">Export everything (CSV)</a></span>
+    <span>{% if LOGIN and is_owner %}<form method="post" action="/logout" style="display:inline"><button class="linkish">Sign out{{ ' (owner)' if PUBLIC }}</button></form> · {% elif PUBLIC and LOGIN %}<a href="/login">Owner sign in</a> · {% endif %}<button class="linkish" type="button" data-theme-toggle>Switch light / dark</button></span>
+  </footer>
+</div>
+<div class="note-bar">{% block notebar %}New results are in. <a href="">Refresh the page</a>{% endblock %}</div>
+<script src="/static/app.js?v={{ ASSET_VERSION }}"></script>
+</body>
+</html>

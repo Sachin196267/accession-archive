@@ -1,0 +1,2 @@
+{% for e in events %}<div data-l="{{ e.level }}"><time title="{{ e.ts|dt }}">{{ e.ts|dt('%H:%M:%S') }}</time><span class="m">{% if show_host and e.host %}<span class="h">{{ e.host }}</span> {% endif %}{{ e.message }}</span></div>
+{% else %}<div><time></time><span class="m">Nothing has happened yet.</span></div>{% endfor %}

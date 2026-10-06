@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8
+# optional locally: JavaScript rendering (then: playwright install chromium)
+playwright>=1.44

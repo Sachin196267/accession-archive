@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% import "_m.html" as m %}
+{% block title %}Register · Accession{% endblock %}
+{% block live %}data-live="/api/live"{% endblock %}
+{% block notebar %}A domain was added or removed. <a href="/">Refresh the register</a>{% endblock %}
+{% block content %}
+
+<div class="head">
+  <div>
+    <div class="kicker">The register</div>
+    <h1>Every site we keep, <em>and how much of it is kept.</em></h1>
+  </div>
+</div>
+
+<div class="ledger">
+  <div><div class="l">Domains</div><div class="v" data-k="t-domains">{{ totals.domains|num }}</div></div>
+  <div><div class="l">URLs found</div><div class="v" data-k="t-urls">{{ totals.urls|num }}</div></div>
+  <div><div class="l">Queued</div><div class="v" data-k="t-queued">{{ totals.queued|num }}</div></div>
+  <div><div class="l">Submitted</div><div class="v" data-k="t-submitted">{{ totals.submitted|num }}</div></div>
+  <div><div class="l">Archived</div><div class="v green" data-k="t-success">{{ totals.success|num }}</div></div>
+  <div><div class="l">Failed</div><div class="v{{ ' red' if totals.failed }}" data-k="t-failed">{{ totals.failed|num }}</div><div class="n"><span data-k="t-blocked">{{ totals.blocked|num }}</span> blocked</div></div>
+  <div><div class="l">Pending</div><div class="v" data-k="t-pending">{{ totals.pending|num }}</div><div class="n"><span data-k="t-never">{{ totals.never|num }}</span> never archived</div></div>
+  <div><div class="l">Last sent</div><div class="v small" data-k="t-last_submission">{{ totals.last_submission|ago }}</div><div class="n">scan <span data-k="t-last_scan">{{ totals.last_scan|ago }}</span></div></div>
+</div>
+
+<details class="drawer"{% if not domains %} open{% endif %}>
+  <summary>Add a domain, or several <span class="plus">one per line</span></summary>
+  <form class="inner" method="post" action="/domains">
+    <div class="cols" style="margin-top:14px">
+      <div>
+        <label class="f"><span>Websites</span>
+          <textarea name="domains" rows="5" required placeholder="example.com&#10;https://blog.example.org/&#10;http://127.0.0.1:8765/  (the bundled demo site)"></textarea>
+        </label>
+        <div class="hint">Paste a bare domain or a full URL. The crawl stays inside the domain (www. and the bare host count as one).</div>
+      </div>
+      <div>
+        <h3>Archive to</h3>
+        <label class="check"><input type="checkbox" name="services" value="wayback" checked><span>Wayback Machine<small>Internet Archive, Save Page Now 2</small></span></label>
+        <label class="check"><input type="checkbox" name="services" value="archive_today"><span>archive.today<small>public form; CAPTCHA pages go to manual review</small></span></label>
+        <label class="check"><input type="checkbox" name="services" value="local" checked><span>Local snapshot<small>a copy kept in this repository</small></span></label>
+      </div>
+    </div>
+    <fieldset>
+      <legend>Crawl</legend>
+      <div class="grid">
+        {% set capped = PUBLIC and not is_owner %}<label class="f"><span>Page limit{{ " (max %d)" % PUBLIC_MAX_PAGES if capped }}</span><input type="number" name="max_pages" value="{{ 200 if capped else 5000 }}" min="1" {% if capped %}max="{{ PUBLIC_MAX_PAGES }}"{% endif %}></label>
+        <label class="f"><span>Link depth</span><input type="number" name="max_depth" value="12" min="0"></label>
+        <label class="f"><span>External links</span>
+          <select name="external_mode">
+            <option value="ignore">Ignore them</option>
+            <option value="record">Record, don't archive</option>
+            <option value="archive">Record and archive (no crawl)</option>
+          </select></label>
+        <label class="f"><span>Rescan every (hours)</span><input type="number" name="rescan_hours" min="1" step="1" placeholder="off"></label>
+      </div>
+      <div class="grid" style="margin-top:10px">
+        <label class="check"><input type="checkbox" name="include_subdomains" value="1"><span>Include subdomains</span></label>
+        <label class="check"><input type="checkbox" name="render_js" value="1" {% if not render_available %}disabled{% endif %}><span>Render JavaScript<small>{{ 'Playwright found' if render_available else 'install Playwright to enable' }}</small></span></label>
+        <label class="check"><input type="checkbox" name="auto_archive" value="1" checked><span>Queue new URLs automatically</span></label>
+        <label class="check"><input type="checkbox" name="start" value="1" checked><span>Start scanning now</span></label>
+      </div>
+    </fieldset>
+    <div class="actions" style="margin-top:18px"><button class="btn primary" type="submit">Add to the register</button></div>
+  </form>
+</details>
+
+<div class="cols">
+  <section>
+    <div class="section-head"><h2>Domains<span class="count">{{ domains|length }}</span></h2>
+      <div class="actions"><a class="btn tiny quiet" href="/export/all.json">Export JSON</a><a class="btn tiny quiet" href="/export/all.csv">Export CSV</a></div>
+    </div>
+    {% if domains %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Domain</th><th>Status</th><th class="num">URLs</th><th class="num">Queued</th>
+        <th class="num">Submitted</th><th class="num">Archived</th><th class="num">Failed</th>
+        <th class="hide-sm">Services</th><th class="hide-sm">Last scan</th><th class="hide-sm">Last sent</th>
+      </tr></thead>
+      <tbody>
+      {% for d in domains %}
+        <tr>
+          <td>
+            <a class="domain-link" href="/domains/{{ d.id }}">{{ d.host }}</a>
+            <div class="minibar"><span data-bar="d{{ d.id }}" style="width:{{ progress[d.id].pct if progress.get(d.id) else 0 }}%"></span></div>
+          </td>
+          <td>{{ m.tag(d.status, 'd' ~ d.id ~ '-status') }}</td>
+          <td class="num" data-k="d{{ d.id }}-urls">{{ d.urls|num }}</td>
+          <td class="num" data-k="d{{ d.id }}-queued">{{ d.queued|num }}</td>
+          <td class="num" data-k="d{{ d.id }}-submitted">{{ d.submitted|num }}</td>
+          <td class="num" data-k="d{{ d.id }}-success">{{ d.success|num }}</td>
+          <td class="num" data-k="d{{ d.id }}-failed">{{ d.failed|num }}</td>
+          <td class="hide-sm small">{% for s in (d.services or '').split(',') if s %}{{ s|svc }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          <td class="when hide-sm" data-k="d{{ d.id }}-last_scan">{{ d.last_scan_at|ago }}</td>
+          <td class="when hide-sm" data-k="d{{ d.id }}-last_submission">{{ d.last_submission_at|ago }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty"><p>The register is empty.</p><p class="small dim" style="font:13px var(--sans)">Add a domain above. To try everything offline, run <code>python -m accession demo-site</code> and add <code>http://127.0.0.1:8765/</code>.</p></div>
+    {% endif %}
+  </section>
+
+  <aside class="side">
+    <section>
+      <div class="section-head"><h2>Right now</h2></div>
+      <dl class="facts">
+        <dt>Crawl speed</dt><dd><span data-k="tp-pages">{{ tp.pages_per_min|num }}</span> pages / min</dd>
+        <dt>Throughput</dt><dd><span data-k="tp-caps">{{ tp.captures_per_hour|num }}</span> captures in the last hour</dd>
+      </dl>
+      <div class="svc-list" style="margin-top:16px">
+        {% for s in services %}
+        <div>
+          <div class="row"><b>{{ s.label }}</b>
+            {% if not s.enabled %}{{ m.tag('off') }}{% elif s.cooldown_until %}<span class="tag" data-s="paused" title="{{ s.last_error }}">cooling {{ s.cooldown_until|ago }}</span>{% else %}<span class="small dim">{{ (s.counts.get('success', 0))|num }} archived</span>{% endif %}
+          </div>
+          <div class="small dim">{{ s.mode }}{% if s.interval %} · 1 every {{ s.interval|round(0)|int }} s{% endif %}{% if s.avg_ms %} · avg {{ (s.avg_ms / 1000)|dur }}{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    <section>
+      <div class="section-head"><h2>Activity</h2></div>
+      <div class="log" data-html="log">{% with show_host = true %}{% include "_log.html" %}{% endwith %}</div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup needed · Accession</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css?v={{ ASSET_VERSION }}">
+</head>
+<body>
+<div class="wrap" style="max-width:620px;padding-top:12vh">
+  <div class="masthead-main"><span class="wordmark"><b>Accession</b><span>a register of things kept</span></span></div>
+  <h1 style="font-size:34px;margin-top:28px">Almost there.</h1>
+  <p>This deployment is locked until its owner finishes the setup in the Vercel project settings (Environment Variables), then redeploys:</p>
+  <dl class="facts">
+    <dt>ACCESSION_PASSWORD</dt><dd>missing: the password for this site</dd>
+    <dt>TURSO_DATABASE_URL</dt><dd>{{ 'set' if db_ok else 'missing: add a Turso database under Storage' }}</dd>
+    <dt>CRON_SECRET</dt><dd>recommended: any long random string</dd>
+  </dl>
+</div>
+</body>
+</html>
