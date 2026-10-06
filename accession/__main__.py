@@ -46,6 +46,7 @@ def main(argv=None):
 
     p = sub.add_parser("demo-site", help="serve the bundled demo website")
     p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--latency", type=float, default=0.0, help="seconds to wait before each answer")
 
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -65,7 +66,7 @@ def main(argv=None):
     if args.cmd == "demo-site":
         from .demo_site import serve
 
-        serve(args.port)
+        serve(args.port, latency=args.latency)
         return
 
     from . import db, repo

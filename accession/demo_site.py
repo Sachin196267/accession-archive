@@ -14,10 +14,11 @@ the second-scan demonstration shows new and missing URLs. /_demo/reset undoes it
 import gzip
 import hashlib
 import threading
+import time
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-STATE = {"version": 1}
+STATE = {"version": 1, "latency": 0.0}
 _lock = threading.Lock()
 
 CSS = "body{font:16px/1.5 Georgia,serif;max-width:720px;margin:40px auto;padding:0 16px}nav a{margin-right:12px}"
@@ -138,6 +139,8 @@ class Handler(BaseHTTPRequestHandler):
             with _lock:
                 STATE["version"] = 1
             return self._send(200, "text/plain", b"reset to version 1\n", {})
+        if STATE["latency"]:
+            time.sleep(STATE["latency"])  # imitate a real server's response time
         status, ctype, body, headers = render(path)
         origin = f"http://{self.headers.get('Host', 'localhost')}"
         if headers.pop("_origin", False):
@@ -164,7 +167,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
 
-def serve(port=8765, host="127.0.0.1", background=False):
+def serve(port=8765, host="127.0.0.1", background=False, latency=0.0):
+    STATE["latency"] = latency
     httpd = ThreadingHTTPServer((host, port), Handler)
     if background:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()

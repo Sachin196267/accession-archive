@@ -7,3 +7,5 @@ data/
 .vercel
 .env
 .env*
+video/
+*.mp4
