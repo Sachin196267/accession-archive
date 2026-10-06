@@ -228,7 +228,8 @@ def svc_label(name):
 
 
 templates.env.filters.update(ago=ago, dt=dt, num=num, dur=dur, split_url=split_url, svc=svc_label)
-ASSET_VERSION = str(int(max(p.stat().st_mtime for p in (HERE / "static").iterdir())))
+# content hash, not mtime: Vercel gives every deployed file the same timestamp
+ASSET_VERSION = hashlib.sha256(b"".join(p.read_bytes() for p in sorted((HERE / "static").iterdir()))).hexdigest()[:10]
 templates.env.globals.update(SERVICES=repo.SERVICES, VERSION=config.VERSION, ASSET_VERSION=ASSET_VERSION, svc_label=svc_label,
                              SERVERLESS=config.SERVERLESS, LOGIN=bool(config.PASSWORD), PUBLIC=config.PUBLIC,
                              PUBLIC_MAX_PAGES=config.PUBLIC_MAX_PAGES,
